@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:imap="http://www.mulesoft.org/schema/mule/imap" xmlns:imaps="http://www.mulesoft.org/schema/mule/imaps" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/imap http://www.mulesoft.org/schema/mule/imap/current/mule-imap.xsd
+http://www.mulesoft.org/schema/mule/imaps http://www.mulesoft.org/schema/mule/imaps/current/mule-imaps.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/current/mule-xml.xsd">
+    <imaps:connector name="IMAP" mailboxFolder="MULA" validateConnections="true" deleteReadMessages="false" checkFrequency="10000" doc:name="IMAP"/>
+    <file:connector name="FileWriting" writeToDirectory="C:\ejercicio21\" autoDelete="true" streaming="true" validateConnections="true" doc:name="File"/>
+    <file:connector name="FileReading" outputPattern="*.xml" readFromDirectory="C:\ejercicio21" autoDelete="true" streaming="true" validateConnections="true" doc:name="File"/>
+    <file:connector name="MoveFile" outputPattern="*.xml" writeToDirectory="C:\Tmp\pedidos\urgentes\#[flowVars.customerId]\" autoDelete="true" streaming="true" validateConnections="true" doc:name="File" readFromDirectory="C:\ejercicio21\"/>
+    <file:connector name="File" outputPattern="#[flowVars.Id].json" writeToDirectory="C:\Tmp\pedidos\urgentes\aProcesar\#[flowVars.customerId]\" autoDelete="true" streaming="true" validateConnections="true" doc:name="File"/>
+    <flow name="ejercicio21Flow">
+        <imaps:inbound-endpoint host="imap.gmail.com" port="993" user="afbl89%40gmail.com"  connector-ref="IMAP" responseTimeout="10000" doc:name="IMAP"/>
+        <choice doc:name="Choice">
+            <when expression="#[java.net.URLEncoder.encode(message.inboundProperties.Subject) == &quot;urgente&quot;]">
+                <expression-transformer doc:name="Expression">
+                    <return-argument evaluator="attachments-list" expression="*"/>
+                </expression-transformer>
+                <collection-splitter doc:name="Collection Splitter"/>
+                <file:outbound-endpoint path="C:\ejercicio21" outputPattern="#[payload.name]" connector-ref="FileWriting" responseTimeout="10000" doc:name="File"/>
+                <logger message="Anfebule: #[payload]" level="INFO" doc:name="Logger"/>
+            </when>
+            <otherwise>
+                <logger message="no es urgente" level="INFO" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="ejercicio21Flow1">
+        <file:inbound-endpoint path="C:\ejercicio21" connector-ref="FileReading" responseTimeout="10000" doc:name="File"/>
+        <file:file-to-byte-array-transformer doc:name="File to Byte Array"/>
+        <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+        <json:xml-to-json-transformer doc:name="XML to JSON"/>
+        <json:json-to-object-transformer returnClass="java.util.HashMap" doc:name="JSON to Object"/>
+        <set-variable variableName="id" value="#[payload.invoice.id]" doc:name="Variable id"/>
+        <set-variable variableName="customerId" value="#[payload.invoice.customerId]" doc:name="Variable customerId"/>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+        <file:outbound-endpoint path="C:\Tmp\pedidos\urgentes\aProcesar\#[flowVars.customerId]\" outputPattern="#[flowVars.Id].json" connector-ref="File" responseTimeout="10000" doc:name="File"/>
+        <json:json-to-xml-transformer doc:name="JSON to XML"/>
+        <logger message="logger: #[payload]" level="INFO" doc:name="Logger"/>
+        <file:outbound-endpoint path="C:\Tmp\pedidos\urgentes\#[flowVars.customerId]" outputPattern="#[flowVars.id].xml" connector-ref="MoveFile" responseTimeout="10000" doc:name="File"/>
+    </flow>
+</mule>
